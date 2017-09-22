@@ -68,7 +68,7 @@ def make_large_df(n_days = 0):
         comps_day = df_day.index.values.tolist()
         # Set all the values from current days dataframe
         for comp_c in comps_day:
-            df.loc[this_day][comp_c.strip()] = df_day.loc[comp_c]
+            df.loc[this_day][comp_c] = df_day.loc[comp_c]
             #df.loc[this_day][(comp_c.strip(), 'price_change')]
 
 
@@ -114,5 +114,5 @@ def make_large_df(n_days = 0):
 
     return df
 
-df = make_large_df(365*7)
+df = make_large_df(365*6)
 df.to_pickle('combined2.pkl')
