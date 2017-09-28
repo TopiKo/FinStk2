@@ -39,7 +39,7 @@ def make_large_df(n_days = 0):
     ordered_keys = [date.strftime("%d.%m.%Y") for date in ordered_datetimes][::-1]
 
     # Companies to consider
-    consider_comp = sorted(list(set(df_dict[ordered_keys[0]].index.values)))
+    consider_comp = sorted(list(set(df_dict[ordered_keys[1]].index.values)))
     N = len(consider_comp)
 
     # Columns to consider
@@ -67,8 +67,12 @@ def make_large_df(n_days = 0):
         # All the companies available from current day
         comps_day = df_day.index.values.tolist()
         # Set all the values from current days dataframe
+        n = 0
         for comp_c in comps_day:
-            df.loc[this_day][comp_c] = df_day.loc[comp_c]
+            #if comp_c.strip() not in comps:
+                #print(comp_c + 'n' + ' ' + str(n) + ' ' +str(len(comps_day)))
+                #n += 1
+            df.loc[this_day][comp_c.strip()] = df_day.loc[comp_c]
             #df.loc[this_day][(comp_c.strip(), 'price_change')]
 
 
@@ -90,17 +94,17 @@ def make_large_df(n_days = 0):
         L_change = np.zeros(len(df))
         L_change[:-1] = L_vals2.values - L_vals1.values
         L_change_p = np.zeros(len(df))
-        L_change_p[:-1] = 100*(L_vals2.values - L_vals1.values)/L_vals2.values
+        L_change_p[:-1] = 100*(L_vals2.values - L_vals1.values)/L_vals1.values
 
         H_change = np.zeros(len(df))
         H_change[:-1] = H_vals2.values - H_vals1.values
         H_change_p = np.zeros(len(df))
-        H_change_p[:-1] = 100*(H_vals2.values - H_vals1.values)/H_vals2.values
+        H_change_p[:-1] = 100*(H_vals2.values - H_vals1.values)/H_vals1.values
 
         Oe_change = np.zeros(len(df))
         Oe_change[:-1] = Oe_vals2.values - Oe_vals1.values
         Oe_change_p = np.zeros(len(df))
-        Oe_change_p[:-1] = 100*(Oe_vals2.values - Oe_vals1.values)/Oe_vals2.values
+        Oe_change_p[:-1] = 100*(Oe_vals2.values - Oe_vals1.values)/Oe_vals1.values
 
 
         df[(comp, 'L_price_change')] = L_change
@@ -111,8 +115,8 @@ def make_large_df(n_days = 0):
         df[(comp, 'Oe_price_change_%')] = Oe_change_p
 
         keys = list(zip([comp]*len(vals), vals))
-
+    #print(df)
     return df
 
-df = make_large_df(365*6)
-df.to_pickle('combined2.pkl')
+df = make_large_df(365*4)
+df.to_pickle('combined.pkl')
