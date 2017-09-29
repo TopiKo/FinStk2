@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, roc_curve, confusion_matrix, roc_auc_score, precision_score
 from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import PolynomialFeatures
 
 def make_Xy(df, consider, predict, timeDelta = 5, futureTime = 1, timeHistory = 365):
 
@@ -21,16 +22,21 @@ def make_Xy(df, consider, predict, timeDelta = 5, futureTime = 1, timeHistory = 
     col_tuples = list(zip(*[comps, arr]))
     index = pd.MultiIndex.from_tuples(col_tuples, names=['company', 'values'])
     df_X = pd.DataFrame(columns = index)
-    df_y = pd.Series(name = predict[0])
+    #df_y = pd.Series(name = predict[0])
     df_y = pd.DataFrame(columns = range(futureTime))
 
     for i in range(futureTime, timeHistory):
+        # pick data from days that are BEFORE the now considered day i. The dates are arranged
+        # descendind order.
         df_l = df.iloc[i + 1 : i + 1 + timeDelta][consider]
+        # Reshape the matrix into one long vector
         data = np.reshape(df_l.values, timeDelta*len(consider), order = 'F')
         df_X.loc[i] = data
         #df_y.loc[i] = df.iloc[i][predict].values.tolist()[0]
+
+        # For the prediction pick values TODAY and some days (futureTime) ahead.
         df_y.loc[i] =[1 + .01*df.iloc[i - add][predict].values[0] for add in range(futureTime)]
-        #print(df_y.loc[i])
+        #print(data, (df_y.loc[i].values - 1)*100)
     #df_X.drop(predict[0][0], axis = 1, inplace = True)
     return df_X, df_y
 
@@ -99,7 +105,7 @@ def plot_stock(df, comp, features  = ['Offer Sell']):
     plt.legend(loc = 1, frameon = False)
     plt.show()
 
-def fit_Learner(comp, pick_comps, threshold = .5):
+def fit_Learner(comp, pick_comps, threshold = .5, plot_stock = False):
 
     #comp = 'Affecto'
 
@@ -114,13 +120,14 @@ def fit_Learner(comp, pick_comps, threshold = .5):
     init_features = ['Oe_price_change_%', 'L_price_change_%', 'H_price_change_%', 'Change M. Eur'] #'L_price_change_%' 'Change M. Eur'
     predict = [(comp, 'L_price_change_%')]
 
-    X, y, df = get_Xy(init_features, predict, pick_comps, ndays, nfut, nhist)
 
+    X, y, df = get_Xy(init_features, predict, pick_comps, ndays, nfut, nhist)
+    col_names = X[comp].columns.values.tolist()
     #y['1x2'] = y[0].multiply(y[1], axis="index")
     y = (y.prod(axis = 1) - 1)*100
     #y = y.max(axis = 1)
 
-    plot_stock(df, comp, ['Sales Lowest', 'L_price_change_%'])
+    #
 
     bad = []
     for col in X.columns.values.tolist():
@@ -130,12 +137,16 @@ def fit_Learner(comp, pick_comps, threshold = .5):
     if 5 < sum(y.isnull()):
         print('YYYYYYYYYYYYYYYYYYYYY')
 
-
     X.fillna(method='bfill', inplace = True)
     y.fillna(method='bfill', inplace = True)
     X.fillna(method='ffill', inplace = True)
     y.fillna(method='ffill', inplace = True)
 
+    if plot_stock: plot_stock(df, comp, ['Sales Lowest', 'L_price_change_%'])
+
+    poly = PolynomialFeatures(degree=2, interaction_only=True)
+    X = poly.fit_transform(X)
+    #print(X)
 
     y =  y > threshold
     X_train = X[int(nhist*.25):]
@@ -145,31 +156,89 @@ def fit_Learner(comp, pick_comps, threshold = .5):
 
     #l1, l2 = zip(*X_train.columns.values.tolist())
     #print(list(l1))
+    '''
+    {'max_features': 5, 'max_depth': 7, 'n_estimators': 600}
+    {'max_features': 10, 'max_depth': 10, 'n_estimators': 800}
+    {'n_estimators': 1000, 'max_features': 7, 'max_depth': 12}
+    {'n_estimators': 1000, 'max_features': 7, 'max_depth': 12}
 
-    rf = RandomForestClassifier(n_estimators = 150, max_depth = 15, max_features = 5)
+    '''
+    rf = RandomForestClassifier(n_estimators = 750, max_depth = 12, max_features = 7)
     # 'n_estimators': 750, 'max_depth': 15, 'max_features': 5
-    param_grid = {'max_features': [5, 10],
-                  'max_depth': [15, 20, 30],
-                  'n_estimators': [500, 750, 1000]}
+    param_grid = {'max_features': [5, 7, 10],
+                  'max_depth': [12, 15],
+                  'n_estimators': [800, 1000]}
 
-    #grid_rf = GridSearchCV(rf, param_grid, scoring='roc_auc', verbose = 3)
+    #grid_rf = GridSearchCV(rf, param_grid, scoring='roc_auc', verbose = 3, cv = 4)
     grid_rf = rf
     grid_rf.fit(X_train, y_train)
+
     y_pred = grid_rf.predict(X_test)
     y_pred_p = grid_rf.predict_proba(X_test)[:,1]
+
+    y_pred_p_train = grid_rf.predict_proba(X_train)[:,1]
+
 
     fpr, tpr, _ = roc_curve(y_test, y_pred_p)
     roc_auc_s = roc_auc_score(y_test, y_pred_p)
     precision_s = precision_score(y_test, y_pred)
-    plt.plot(fpr, tpr)
-    plt.plot([0,1], [0,1])
-    plt.show()
-    #print(grid_rf.best_params_) #{'max_features': 200, 'n_estimators': 1000, 'max_depth': 30}
-    #print(grid_rf.best_score_)
-    print('{:s}: precision = {:.2f}, roc_auc_score = {:.2f}'.format(comp, precision_s, roc_auc_s))
+
+    roc_auc_s_train = roc_auc_score(y_train, y_pred_p_train)
+
+    print('{:s}: precision = {:.2f}, roc_auc_score = {:.2f}, roc_auc_score_train = {:.2f}'.format(comp,
+     precision_s, roc_auc_s, roc_auc_s_train))
     print(classification_report(y_test, y_pred))
     print(confusion_matrix(y_test, y_pred))
     print()
+
+
+    # Try to imporive by removing features
+    feat_importance = grid_rf.feature_importances_
+    fraction = .10
+    ordered_features = np.argsort(feat_importance)[::-1]
+    #print()
+    feat_names = poly.get_feature_names(col_names)
+    for i in ordered_features[:50]:
+        print(feat_names[i])
+    f, [ax1, ax2] = plt.subplots(2, figsize = (12,12))
+    ax1.plot(fpr, tpr)
+    ax1.plot([0,1], [0,1])
+    ax2.bar(range(len(ordered_features)),
+            feat_importance[ordered_features], 1, color="blue", alpha = .8)
+    ax2.axvline(x=int(len(ordered_features)/10), alpha = .5)
+    plt.show()
+
+    for frac in np.arange(.01, .2, .01):
+        print('fraction = {:.2f}'.format(frac))
+        pick_features = ordered_features[:int(len(feat_importance)*frac)]
+        X_e = X[:, pick_features]
+        X_e_train = X[int(nhist*.25):]
+        X_e_test = X[:int(nhist*.25)]
+
+        grid_rf.fit(X_e_train, y_train)
+        y_pred = grid_rf.predict(X_e_test)
+        y_pred_p = grid_rf.predict_proba(X_e_test)[:,1]
+
+        y_pred_p_train = grid_rf.predict_proba(X_e_train)[:,1]
+        roc_auc_s = roc_auc_score(y_test, y_pred_p)
+        precision_s = precision_score(y_test, y_pred)
+
+        roc_auc_s_train = roc_auc_score(y_train, y_pred_p_train)
+
+        print('{:s}: precision = {:.2f}, roc_auc_score = {:.2f}, roc_auc_score_train = {:.2f}'.format(comp,
+        precision_s, roc_auc_s, roc_auc_s_train))
+        print(classification_report(y_test, y_pred))
+        print(confusion_matrix(y_test, y_pred))
+        print()
+
+    #for xc in [i*ndays*len(init_features) for i in range(ndays)]:
+    #    ax2.axvline(x=xc, alpha = .2)
+    #ax2.axvline(x=, alpha = .5)
+    #print(grid_rf.best_params_) #{'max_features': 200, 'n_estimators': 1000, 'max_depth': 30}
+    #print(grid_rf.best_score_)
+    #print(grid_rf.best_estimator_.feature_importances_)
+
+
     #plt.show()
     return roc_auc_s
 
@@ -204,7 +273,7 @@ comps = ['Afarak Group', 'Affecto', 'Ahlstrom-Munksjö', 'Aktia Pankki A',
 
 
 sum_ra = 0
-threshold = 2
+threshold = 2 #%
 
 for comp in comps:
     sum_ra += fit_Learner(comp, [comp], threshold)
