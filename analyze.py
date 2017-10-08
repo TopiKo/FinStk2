@@ -1,10 +1,13 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, roc_curve, confusion_matrix, roc_auc_score, precision_score
 from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.decomposition import PCA
 
 def make_Xy(df, consider, predict, timeDelta = 5, futureTime = 1, timeHistory = 365):
 
@@ -24,20 +27,23 @@ def make_Xy(df, consider, predict, timeDelta = 5, futureTime = 1, timeHistory = 
     df_X = pd.DataFrame(columns = index)
     #df_y = pd.Series(name = predict[0])
     df_y = pd.DataFrame(columns = range(futureTime))
+    n = 0
 
-    for i in range(futureTime, timeHistory):
+    for i in range(futureTime + 1, timeHistory + futureTime + 1):
         # pick data from days that are BEFORE the now considered day i. The dates are arranged
         # descendind order.
-        df_l = df.iloc[i + 1 : i + 1 + timeDelta][consider]
+        df_l = df.iloc[i : i + timeDelta][consider]
         # Reshape the matrix into one long vector
         data = np.reshape(df_l.values, timeDelta*len(consider), order = 'F')
-        df_X.loc[i] = data
+        df_X.loc[n] = data
         #df_y.loc[i] = df.iloc[i][predict].values.tolist()[0]
 
         # For the prediction pick values TODAY and some days (futureTime) ahead.
-        df_y.loc[i] =[1 + .01*df.iloc[i - add][predict].values[0] for add in range(futureTime)]
+        df_y.loc[n] =[1 + .01*df.iloc[i - 1 - add][predict].values[0] for add in range(futureTime)]
+        n += 1
         #print(data, (df_y.loc[i].values - 1)*100)
     #df_X.drop(predict[0][0], axis = 1, inplace = True)
+
     return df_X, df_y
 
 
@@ -89,9 +95,24 @@ def plot_stock(df, comp, features  = ['Offer Sell']):
     #x = y.index.values.tolist()
     x = -df.index.values
     plt.figure(figsize = (20, 7))
-    [y0, y1] = [df[(comp, features[i])].values.tolist() for i in range(2)]
+    [y0, y1] = [df[(comp, features[i])].values for i in range(len(features))]
+    ypred_mask = df[(comp, 'prediction')].values
+    ytruth_mask = df[(comp, 'ground_truth')].values
+
+    correct_pred_mask = ypred_mask & ytruth_mask
+    incorrect_pred_mask = ypred_mask & np.logical_not(ytruth_mask)
+
+    X_pred_cor = x[correct_pred_mask.tolist()]
+    Y_pred_cor = y0[correct_pred_mask.tolist()]
+    X_pred_incor = x[incorrect_pred_mask.tolist()]
+    Y_pred_incor = y0[incorrect_pred_mask.tolist()]
+
 
     plt.plot(x,y0, label = features[0])
+    plt.scatter(X_pred_cor, Y_pred_cor)
+    plt.scatter(X_pred_incor, Y_pred_incor, s = 100, c = 'red')
+    #plt.scatter(x[ytruth_mask.tolist()], y0[ytruth_mask.tolist()], c = 'red')
+
     for xc in x:
         plt.axvline(x=xc, alpha = .2)
     plt.legend(loc = 2, frameon = False)
@@ -105,7 +126,7 @@ def plot_stock(df, comp, features  = ['Offer Sell']):
     plt.legend(loc = 1, frameon = False)
     plt.show()
 
-def fit_Learner(comp, pick_comps, threshold = .5, plot_stock = False):
+def fit_Learner(comp, pick_comps, threshold = .5, plot_stock_b = False):
 
     #comp = 'Affecto'
 
@@ -124,7 +145,9 @@ def fit_Learner(comp, pick_comps, threshold = .5, plot_stock = False):
     X, y, df = get_Xy(init_features, predict, pick_comps, ndays, nfut, nhist)
     col_names = X[comp].columns.values.tolist()
     #y['1x2'] = y[0].multiply(y[1], axis="index")
+
     y = (y.prod(axis = 1) - 1)*100
+
     #y = y.max(axis = 1)
 
     #
@@ -142,10 +165,14 @@ def fit_Learner(comp, pick_comps, threshold = .5, plot_stock = False):
     X.fillna(method='ffill', inplace = True)
     y.fillna(method='ffill', inplace = True)
 
-    if plot_stock: plot_stock(df, comp, ['Sales Lowest', 'L_price_change_%'])
 
+    '''
     poly = PolynomialFeatures(degree=2, interaction_only=True)
     X = poly.fit_transform(X)
+    rf = RandomForestClassifier(n_estimators = 750, max_depth = 12, max_features = 7)
+    '''
+
+    pipe = make_pipeline(PolynomialFeatures(), PCA(), RandomForestClassifier())
     #print(X)
 
     y =  y > threshold
@@ -156,27 +183,38 @@ def fit_Learner(comp, pick_comps, threshold = .5, plot_stock = False):
 
     #l1, l2 = zip(*X_train.columns.values.tolist())
     #print(list(l1))
-    '''
-    {'max_features': 5, 'max_depth': 7, 'n_estimators': 600}
-    {'max_features': 10, 'max_depth': 10, 'n_estimators': 800}
-    {'n_estimators': 1000, 'max_features': 7, 'max_depth': 12}
-    {'n_estimators': 1000, 'max_features': 7, 'max_depth': 12}
 
-    '''
-    rf = RandomForestClassifier(n_estimators = 750, max_depth = 12, max_features = 7)
-    # 'n_estimators': 750, 'max_depth': 15, 'max_features': 5
-    param_grid = {'max_features': [5, 7, 10],
-                  'max_depth': [12, 15],
-                  'n_estimators': [800, 1000]}
+    param_grid = [{'polynomialfeatures__degree': [1],
+                  'pca__n_components': [40],
+                  'randomforestclassifier__max_features': [7],
+                  'randomforestclassifier__max_depth': [5],
+                  'randomforestclassifier__n_estimators': [50]}]
+                  #{'polynomialfeatures__degree': [2],
+                  # 'pca__n_components': [25, 40, 80],
+                  # 'randomforestclassifier__max_features': [3, 5, 7],
+                  # 'randomforestclassifier__max_depth': [3, 5],
+                  # 'randomforestclassifier__n_estimators': [10, 50, 100]} ]
 
-    #grid_rf = GridSearchCV(rf, param_grid, scoring='roc_auc', verbose = 3, cv = 4)
-    grid_rf = rf
+    grid_rf = GridSearchCV(pipe, param_grid, scoring='roc_auc', verbose = 0, cv = 2, n_jobs = 2)
+    #grid_rf = rf
     grid_rf.fit(X_train, y_train)
 
     y_pred = grid_rf.predict(X_test)
     y_pred_p = grid_rf.predict_proba(X_test)[:,1]
 
+    y_pred_train = grid_rf.predict(X_train)
     y_pred_p_train = grid_rf.predict_proba(X_train)[:,1]
+
+    tmp_y_train = pd.Series(y_pred_train, index = X_train.index)
+    tmp_y_test = pd.Series(y_pred, index = X_test.index)
+
+    df = df[nfut+1:]
+    df.reset_index(inplace = True)
+    df[(comp, 'prediction')] = pd.concat([tmp_y_test, tmp_y_train])
+    df[(comp, 'ground_truth')] = y
+
+
+    if plot_stock_b: plot_stock(df.iloc[:nhist], comp, ['Sales Lowest', 'L_price_change_%'])
 
 
     fpr, tpr, _ = roc_curve(y_test, y_pred_p)
@@ -185,6 +223,7 @@ def fit_Learner(comp, pick_comps, threshold = .5, plot_stock = False):
 
     roc_auc_s_train = roc_auc_score(y_train, y_pred_p_train)
 
+    print(grid_rf.best_params_)
     print('{:s}: precision = {:.2f}, roc_auc_score = {:.2f}, roc_auc_score_train = {:.2f}'.format(comp,
      precision_s, roc_auc_s, roc_auc_s_train))
     print(classification_report(y_test, y_pred))
@@ -192,55 +231,173 @@ def fit_Learner(comp, pick_comps, threshold = .5, plot_stock = False):
     print()
 
 
-    # Try to imporive by removing features
-    feat_importance = grid_rf.feature_importances_
-    fraction = .10
-    ordered_features = np.argsort(feat_importance)[::-1]
-    #print()
-    feat_names = poly.get_feature_names(col_names)
-    for i in ordered_features[:50]:
-        print(feat_names[i])
-    f, [ax1, ax2] = plt.subplots(2, figsize = (12,12))
-    ax1.plot(fpr, tpr)
-    ax1.plot([0,1], [0,1])
-    ax2.bar(range(len(ordered_features)),
-            feat_importance[ordered_features], 1, color="blue", alpha = .8)
-    ax2.axvline(x=int(len(ordered_features)/10), alpha = .5)
-    plt.show()
-
-    for frac in np.arange(.01, .2, .01):
-        print('fraction = {:.2f}'.format(frac))
-        pick_features = ordered_features[:int(len(feat_importance)*frac)]
-        X_e = X[:, pick_features]
-        X_e_train = X[int(nhist*.25):]
-        X_e_test = X[:int(nhist*.25)]
-
-        grid_rf.fit(X_e_train, y_train)
-        y_pred = grid_rf.predict(X_e_test)
-        y_pred_p = grid_rf.predict_proba(X_e_test)[:,1]
-
-        y_pred_p_train = grid_rf.predict_proba(X_e_train)[:,1]
-        roc_auc_s = roc_auc_score(y_test, y_pred_p)
-        precision_s = precision_score(y_test, y_pred)
-
-        roc_auc_s_train = roc_auc_score(y_train, y_pred_p_train)
-
-        print('{:s}: precision = {:.2f}, roc_auc_score = {:.2f}, roc_auc_score_train = {:.2f}'.format(comp,
-        precision_s, roc_auc_s, roc_auc_s_train))
-        print(classification_report(y_test, y_pred))
-        print(confusion_matrix(y_test, y_pred))
-        print()
-
-    #for xc in [i*ndays*len(init_features) for i in range(ndays)]:
-    #    ax2.axvline(x=xc, alpha = .2)
-    #ax2.axvline(x=, alpha = .5)
-    #print(grid_rf.best_params_) #{'max_features': 200, 'n_estimators': 1000, 'max_depth': 30}
-    #print(grid_rf.best_score_)
-    #print(grid_rf.best_estimator_.feature_importances_)
-
 
     #plt.show()
     return roc_auc_s
+
+
+
+def fit_predict(X_train, X_test, y_train, y_test, comp, pick_comps, threshold = .5, plot_stock_b = False):
+
+    #comp = 'Affecto'
+
+
+    pipe = make_pipeline(PolynomialFeatures(), PCA(), RandomForestClassifier())
+
+
+    #l1, l2 = zip(*X_train.columns.values.tolist())
+    #print(list(l1))
+
+    param_grid = [{'polynomialfeatures__degree': [1],
+                  'pca__n_components': [40],
+                  'randomforestclassifier__max_features': [7],
+                  'randomforestclassifier__max_depth': [5],
+                  'randomforestclassifier__n_estimators': [50]}]
+                  #{'polynomialfeatures__degree': [2],
+                  # 'pca__n_components': [25, 40, 80],
+                  # 'randomforestclassifier__max_features': [3, 5, 7],
+                  # 'randomforestclassifier__max_depth': [3, 5],
+                  # 'randomforestclassifier__n_estimators': [10, 50, 100]} ]
+
+    grid_rf = GridSearchCV(pipe, param_grid, scoring='roc_auc', verbose = 0, cv = 2, n_jobs = 2)
+    #grid_rf = rf
+    grid_rf.fit(X_train, y_train)
+
+    y_pred = grid_rf.predict(X_test)
+    y_pred_p = grid_rf.predict_proba(X_test)[:,1]
+
+    y_pred_train = grid_rf.predict(X_train)
+    y_pred_p_train = grid_rf.predict_proba(X_train)[:,1]
+
+    tmp_y_train = pd.Series(y_pred_train, index = X_train.index)
+    tmp_y_test = pd.Series(y_pred, index = X_test.index)
+
+    '''
+    df = df[nfut+1:]
+    df.reset_index(inplace = True)
+    df[(comp, 'prediction')] = pd.concat([tmp_y_test, tmp_y_train])
+    df[(comp, 'ground_truth')] = y
+
+
+    if plot_stock_b: plot_stock(df.iloc[:nhist], comp, ['Sales Lowest', 'L_price_change_%'])
+    '''
+
+
+    fpr, tpr, _ = roc_curve(y_test, y_pred_p)
+    roc_auc_s = roc_auc_score(y_test, y_pred_p)
+    precision_s = precision_score(y_test, y_pred)
+
+    roc_auc_s_train = roc_auc_score(y_train, y_pred_p_train)
+
+    print(grid_rf.best_params_)
+    print('{:s}: precision = {:.2f}, roc_auc_score = {:.2f}, roc_auc_score_train = {:.2f}'.format(comp,
+     precision_s, roc_auc_s, roc_auc_s_train))
+    print(classification_report(y_test, y_pred))
+    print(confusion_matrix(y_test, y_pred))
+    print()
+
+
+
+    #plt.show()
+    return y_pred_p, roc_auc_s
+
+
+def get_train_test(comp, pick_comps):
+
+    nfut = 2
+    ndays = 10
+    nhist = 365*2
+
+    # 'L_price_change', 'L_price_change_%', 'H_price_change',
+    # 'Oe_price_change', 'Offer Sell', 'H_price_change_%',
+    # 'Change M. Eur', 'Sales Highest', 'Oe_price_change_%',
+    # 'Offer Buy', 'Offer End', 'Sales Lowest'
+    init_features = ['Sales Lowest', 'Sales Highest', 'Oe_price_change_%', 'L_price_change_%', 'H_price_change_%', 'Change M. Eur'] #'L_price_change_%' 'Change M. Eur'
+    predict = [(comp, 'L_price_change_%')]
+
+    X, y, df = get_Xy(init_features, predict, pick_comps, ndays, nfut, nhist)
+    y = (y.prod(axis = 1) - 1)*100
+
+
+    bad = []
+    for col in X.columns.values.tolist():
+        if 10 < sum(X[col].isnull()):
+            if col[0] not in bad: bad.append(col[0])
+
+    if 5 < sum(y.isnull()):
+        print('YYYYYYYYYYYYYYYYYYYYY')
+
+    X.fillna(method='bfill', inplace = True)
+    y.fillna(method='bfill', inplace = True)
+    X.fillna(method='ffill', inplace = True)
+    y.fillna(method='ffill', inplace = True)
+
+    y =  y > threshold
+    X_train = X[int(nhist*.25):]
+    y_train = y[int(nhist*.25):]
+    X_test = X[:int(nhist*.25)]
+    y_test = y[:int(nhist*.25)]
+
+    return X_train, X_test, y_train, y_test, df
+
+def invest_to(inv_list):
+
+    max_pred = 0
+    for val0,val1 in inv_list:
+        if max_pred < val1:
+            max_pred = val1
+            comp = val0
+    return comp
+
+def test_simulate(comp_dict, fund = 10000):
+
+    col_list = ['company', 'buy/sell', 'n', 'price', 'id']
+    shop_df = pd.DataFrame(columns = col_list)
+    comps = list(comp_dict.keys())
+    free_money = fund
+    bought_days = []
+    shop_dict = {}
+    id = 0
+    for day in range(len(comp_dict[comps[0]])):
+        invest = []
+
+        for comp in comps:
+            if comp_dict[comp].iloc[day]['prediction'] > 0.5:
+                invest.append((comp, comp_dict[comp].iloc[day]['prediction']))
+
+        day_prices = comp_dict[comp].iloc[day][['Sales Lowest', 'Sales Highest']].values
+
+        if 0 < len(invest):
+            comp = invest_to(invest)
+            n_buy = int(free_money/day_prices[1]/2)
+            if n_buy > 0:
+                free_money -= n_buy*day_prices[1]
+                shop_dict['buy_%i' %day] = [comp, -n_buy*day_prices[1], n_buy, day_prices[1], '%4d_b' %id]
+                id += 1
+                bought_days.append(day)
+                #print('buy %0.2f' %float(n_buy*day_prices[1]))
+
+
+        if day in np.array(bought_days) + 3:
+            n = shop_dict['buy_%i' %(day - 3)][2]
+            comp = shop_dict['buy_%i' %(day - 3)][0]
+            id_s = shop_dict['buy_%i' %(day - 3)][4][:4]
+            free_money += n*day_prices[0]
+            shop_dict['sell_%i' %day] = [comp, n*day_prices[0], -n, day_prices[0], id_s + '_s']
+            #print('sell %0.2f' %float(n*day_prices[0]))
+
+
+
+    df = pd.DataFrame.from_dict(shop_dict, orient = 'index')
+    df.columns = col_list
+    df = df.sort_values('id')
+    s = df['buy/sell'].values
+    df['net'] = np.zeros(len(df))
+
+    df.loc[1::2, 'net'] = s[1::2] + s[:-1:2]
+    print(df)
+    print('money made: %.1f' %(df['net'].values.sum()))
+    print(free_money)
 
 comps = ['Afarak Group', 'Affecto', 'Ahlstrom-Munksjö', 'Aktia Pankki A',
       'Alma Media', 'Amer Sports A', 'Apetit', 'Aspo',
@@ -273,13 +430,20 @@ comps = ['Afarak Group', 'Affecto', 'Ahlstrom-Munksjö', 'Aktia Pankki A',
 
 
 sum_ra = 0
-threshold = 2 #%
+threshold = 1.5 #%
+comp_df_dict = {}
+nfut = 2
 
-for comp in comps:
-    sum_ra += fit_Learner(comp, [comp], threshold)
+for comp in comps[:40]:
+    X_train, X_test, y_train, y_test, df = get_train_test(comp, [comp])
+    y_pred, roc_auc = fit_predict(X_train, X_test, y_train, y_test, comp, [comp], threshold = threshold, plot_stock_b = False)
+    if roc_auc > .6:
+        df = df.loc[X_test.index.values + nfut][comp]
+        df['prediction'] = y_pred
+        comp_df_dict[comp] = df.iloc[::-1]
+    #sum_ra += fit_Learner(comp, [comp], threshold, True )
 
-
-
+test_simulate(comp_df_dict)
 
 print('roc_auc average')
 print(sum_ra/len(comps))

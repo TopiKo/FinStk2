@@ -23,6 +23,7 @@ def get_all_dfs():
                 raise
             all = set(all_companies | a)
 
+    print(len(df_dict))
 
     return df_dict
 
@@ -118,5 +119,5 @@ def make_large_df(n_days = 0):
     #print(df)
     return df
 
-df = make_large_df(365*4)
+df = make_large_df(365*6)
 df.to_pickle('combined.pkl')
