@@ -23,8 +23,6 @@ def get_all_dfs():
                 raise
             all = set(all_companies | a)
 
-    print(len(df_dict))
-
     return df_dict
 
 
@@ -35,8 +33,7 @@ def make_large_df(n_days = 0):
     if n_days == 0: n_days = len(df_dict)
 
     # Order the dates
-    dates = df_dict.keys()
-    ordered_datetimes = sorted([datetime.strptime(date, '%d.%m.%Y') for date in dates])
+    ordered_datetimes = sorted([datetime.strptime(date, '%d.%m.%Y') for date in df_dict.keys()])
     ordered_keys = [date.strftime("%d.%m.%Y") for date in ordered_datetimes][::-1]
 
     # Companies to consider
@@ -44,11 +41,14 @@ def make_large_df(n_days = 0):
     N = len(consider_comp)
 
     # Columns to consider
-    colls_per_company = df_dict[ordered_keys[0]].columns.values.tolist()
+    #colls_per_company = df_dict[ordered_keys[0]].columns.values.tolist()
+    #print(colls_per_company) ['Offer End', 'Offer Buy', 'Offer Sell', 'Sales Lowest', 'Sales Highest', 'Change M. Eur']
+    colls_per_company = ['offer_end', 'offer_buy', 'offer_sell', 'sales_low', 'sales_high', 'change_Me']
     nc = len(colls_per_company)
 
     # Make array with each company name repeated 6 times (once for for each column).
     comps = np.reshape(np.array([np.repeat(comp.strip(), nc) for comp in consider_comp]), N*nc)
+
     # Dual column indices:
     index_arrs = [comps, [val for val in colls_per_company]*N]
     tuples = list(zip(*index_arrs))
@@ -61,63 +61,44 @@ def make_large_df(n_days = 0):
     # Make df with columns having multi index (company, data) and index, date.
     df = pd.DataFrame(init_nans, index=ordered_keys[:n_days], columns=index)
     df.index.name = 'date'
+
     # Set values for each date into the large df
-    for this_day in df.index[:n_days]:
-        # Current days dataframe
-        df_day = df_dict[this_day]
+    for this_day in df.index.values:
         # All the companies available from current day
+        df_day = df_dict[this_day]
         comps_day = df_day.index.values.tolist()
-        # Set all the values from current days dataframe
-        n = 0
         for comp_c in comps_day:
-            #if comp_c.strip() not in comps:
-                #print(comp_c + 'n' + ' ' + str(n) + ' ' +str(len(comps_day)))
-                #n += 1
+            # Set all the values from current days dataframe
             df.loc[this_day][comp_c.strip()] = df_day.loc[comp_c]
-            #df.loc[this_day][(comp_c.strip(), 'price_change')]
 
 
     comps, vals = zip(*df.columns.values.tolist())
-    comps = sorted(list(set(comps)))
-    vals = list(set(vals))
-    vals += ['H_price_change', 'L_price_change', 'H_price_change_%', 'L_price_change_%']
-    vals = sorted(vals)
 
-    #print(vals)
-    for comp in comps:
-        L_vals1 = df.iloc[1:][(comp, 'Sales Lowest')]
-        L_vals2 = df.iloc[:-1][(comp, 'Sales Lowest')]
-        H_vals1 = df.iloc[1:][(comp, 'Sales Highest')]
-        H_vals2 = df.iloc[:-1][(comp, 'Sales Highest')]
-        Oe_vals1 = df.iloc[1:][(comp, 'Offer End')]
-        Oe_vals2 = df.iloc[:-1][(comp, 'Offer End')]
+    for comp in set(comps):
+        slow1, slow0 = df.iloc[1:][(comp, 'sales_low')].values, df.iloc[:-1][(comp, 'sales_low')].values
+        shigh1, shigh0 = df.iloc[1:][(comp, 'sales_high')].values, df.iloc[:-1][(comp, 'sales_high')].values
+        oend1, oend0 = df.iloc[1:][(comp, 'offer_end')].values, df.iloc[:-1][(comp, 'offer_end')].values
 
-        L_change = np.zeros(len(df))
-        L_change[:-1] = L_vals2.values - L_vals1.values
-        L_change_p = np.zeros(len(df))
-        L_change_p[:-1] = 100*(L_vals2.values - L_vals1.values)/L_vals1.values
+        c_slow = slow0 - slow1
+        c_slow_p = c_slow/slow1
 
-        H_change = np.zeros(len(df))
-        H_change[:-1] = H_vals2.values - H_vals1.values
-        H_change_p = np.zeros(len(df))
-        H_change_p[:-1] = 100*(H_vals2.values - H_vals1.values)/H_vals1.values
+        c_shigh = shigh0 - shigh1
+        c_shigh_p = c_shigh/shigh1
 
-        Oe_change = np.zeros(len(df))
-        Oe_change[:-1] = Oe_vals2.values - Oe_vals1.values
-        Oe_change_p = np.zeros(len(df))
-        Oe_change_p[:-1] = 100*(Oe_vals2.values - Oe_vals1.values)/Oe_vals1.values
+        c_oend = oend0 - oend1
+        c_oend_p = c_oend/oend1
 
+        df[(comp, 'c_slow')] = np.append(c_slow, np.nan)
+        df[(comp, 'c_slow_%')] = np.append(c_slow_p, np.nan)
+        df[(comp, 'c_shigh')] = np.append(c_shigh, np.nan)
+        df[(comp, 'c_shigh_%')] = np.append(c_shigh_p, np.nan)
+        df[(comp, 'c_oend')] = np.append(c_oend, np.nan)
+        df[(comp, 'c_oend_%')] = np.append(c_oend_p, np.nan)
 
-        df[(comp, 'L_price_change')] = L_change
-        df[(comp, 'L_price_change_%')] = L_change_p
-        df[(comp, 'H_price_change')] = H_change
-        df[(comp, 'H_price_change_%')] = H_change_p
-        df[(comp, 'Oe_price_change')] = Oe_change
-        df[(comp, 'Oe_price_change_%')] = Oe_change_p
+    # lose the last row of the df, as the change is not known there...
+    df = df[:-1]
 
-        keys = list(zip([comp]*len(vals), vals))
-    #print(df)
     return df
 
-df = make_large_df(365*6)
+df = make_large_df(365*4)
 df.to_pickle('combined.pkl')

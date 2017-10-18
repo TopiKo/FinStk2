@@ -8,7 +8,7 @@ import os
 
 def get_stored():
     vals = []
-    for file in os.listdir("data2/"):
+    for file in os.listdir("data/"):
         if file.endswith(".pkl"):
             vals.append(file.split('.pkl')[0].split('_')[-1])
     return vals
@@ -40,7 +40,7 @@ def get_data(days, sleep_t = 1):
                 if date[-1].text.split(' ')[-1] == day:
                     data_strs = driver.find_elements_by_tag_name('tr')
                     df = get_df(data_strs)
-                    df.to_pickle('data2/market_data_{:s}.pkl'.format(day))
+                    df.to_pickle('data/market_data_{:s}.pkl'.format(day))
                     print('alles good {:s}'.format(day), df.shape)
             except Exception as e:
                 print('KAAKAAKKAAK {:s}'.format(day))
@@ -48,8 +48,9 @@ def get_data(days, sleep_t = 1):
             print()
 
 def get_df(elems):
-    colls = ['Offer End', 'Offer Buy', 'Offer Sell',
-            'Sales Lowest', 'Sales Highest', 'Change M. Eur']
+    colls = ['offer_end', 'offer_buy', 'offer_sell',
+             'sales_low', 'sales_high', 'change_Me']
+
     df = pd.DataFrame(columns = colls)
 
     for elem in elems:
@@ -76,7 +77,7 @@ def get_df(elems):
     return df
 
 
-numdays = 365*15
+numdays = 1000 #365*15
 base = datetime.datetime.today()
 days = [base - datetime.timedelta(days=x) for x in range(1, numdays)]
 
