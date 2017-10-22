@@ -37,6 +37,8 @@ def get_X_y(df, predComp, nfut, nhist, totHist):
     # Pick the future and add previous day offer end
     y = X[X.columns[y_cols_mask]].copy()
     y.loc[:,'offer_end_prev'] = X['offer_end_-01'].values
+    y.loc[:,'sales_low_prev'] = X['sales_low_-01'].values
+    y.loc[:,'sales_high_prev'] = X['sales_high_-01'].values
 
     # Fill still existing possible nans
     X.fillna(method='bfill', inplace = True)
@@ -52,7 +54,7 @@ def refine_y(y,nfut):
     '''
     Create the values you want to predict
     '''
-    
+
     y.loc[:,'offer_end_change'] = (y['offer_end_{:03d}'.format(nfut)] \
                                 - y['offer_end_prev'])/y['offer_end_prev']
 
@@ -60,9 +62,14 @@ def refine_y(y,nfut):
                                 - y['sales_high_000'])/y['sales_high_000']
 
     y.loc[:,'sale_low_change'] = (y['sales_low_{:03d}'.format(nfut)] \
-                                - y['sales_low_000'])/y['sales_low_000']
+                                - y['sales_low_prev'])/y['sales_low_prev']
 
-    return y[['offer_end_change','sale_low_to_high_change', 'sale_low_change']], \
+    y.loc[:,'sale_high_change'] = (y['sales_high_{:03d}'.format(nfut)] \
+                                - y['sales_high_prev'])/y['sales_high_prev']
+
+    # , 'c_oend_%_000', 'c_oend_%_001'
+    return y[['offer_end_change','sale_low_to_high_change',
+              'sale_low_change', 'sale_high_change']], \
             y[['offer_end_change', 'sale_low_to_high_change', 'sale_low_change',
             'offer_end_prev', 'sales_low_000', 'sales_high_000', 'offer_end_{:03d}'.format(nfut)]]
 

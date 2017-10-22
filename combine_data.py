@@ -100,5 +100,5 @@ def make_large_df(n_days = 0):
 
     return df
 
-df = make_large_df(365*4)
+df = make_large_df(365*5)
 df.to_pickle('combined.pkl')
