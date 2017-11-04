@@ -58,8 +58,8 @@ def refine_y(y,nfut):
     y.loc[:,'offer_end_change'] = (y['offer_end_{:03d}'.format(nfut)] \
                                 - y['offer_end_prev'])/y['offer_end_prev']
 
-    y.loc[:,'sale_low_to_high_change'] = (y['sales_low_{:03d}'.format(nfut)] \
-                                - y['sales_high_000'])/y['sales_high_000']
+    y.loc[:,'sale_low_change+1'] = (y['sales_low_{:03d}'.format(1)] \
+                                - y['sales_low_prev'])/y['sales_low_prev']
 
     y.loc[:,'sale_low_change'] = (y['sales_low_{:03d}'.format(nfut)] \
                                 - y['sales_low_prev'])/y['sales_low_prev']
@@ -68,10 +68,11 @@ def refine_y(y,nfut):
                                 - y['sales_high_prev'])/y['sales_high_prev']
 
     # , 'c_oend_%_000', 'c_oend_%_001'
-    return y[['offer_end_change','sale_low_to_high_change',
+    return y[['offer_end_change','sale_low_change+1',
               'sale_low_change', 'sale_high_change']], \
-            y[['offer_end_change', 'sale_low_to_high_change', 'sale_low_change',
-            'offer_end_prev', 'sales_low_000', 'sales_high_000', 'offer_end_{:03d}'.format(nfut)]]
+            y[['offer_end_change', 'sale_low_change+1', 'sale_low_change',
+            'offer_end_prev', 'sales_low_000', 'sales_high_000', 'sales_low_{:03d}'.format(nfut),
+            'sales_high_{:03d}'.format(nfut), 'offer_end_{:03d}'.format(nfut)]]
 
 
 def get_companies_list(nan_streak_threshold = 10):
