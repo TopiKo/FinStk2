@@ -70,7 +70,7 @@ def refine_y(y,nfut):
     # , 'c_oend_%_000', 'c_oend_%_001'
     return y[['offer_end_change','sale_low_change+1',
               'sale_low_change', 'sale_high_change']], \
-            y[['offer_end_change', 'sale_low_change+1', 'sale_low_change',
+            y[['sales_low_prev', 'sales_high_prev', 'sale_low_change+1', 'sale_low_change',
             'offer_end_prev', 'sales_low_000', 'sales_high_000', 'sales_low_{:03d}'.format(nfut),
             'sales_high_{:03d}'.format(nfut), 'offer_end_{:03d}'.format(nfut)]]
 
