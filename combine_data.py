@@ -67,13 +67,14 @@ def make_large_df(n_days = 0):
         # All the companies available from current day
         df_day = df_dict[this_day]
         comps_day = df_day.index.values.tolist()
+        print(this_day, len(comps_day))
         for comp_c in comps_day:
             # Set all the values from current days dataframe
             df.loc[this_day][comp_c.strip()] = df_day.loc[comp_c]
 
 
     comps, vals = zip(*df.columns.values.tolist())
-
+    print(set(comps))
     for comp in set(comps):
         slow1, slow0 = df.iloc[1:][(comp, 'sales_low')].values, df.iloc[:-1][(comp, 'sales_low')].values
         shigh1, shigh0 = df.iloc[1:][(comp, 'sales_high')].values, df.iloc[:-1][(comp, 'sales_high')].values
@@ -100,5 +101,6 @@ def make_large_df(n_days = 0):
 
     return df
 
-df = make_large_df(365*4)
+df = make_large_df(int(365*3.02))
+
 df.to_pickle('combined.pkl')
