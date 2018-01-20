@@ -6,7 +6,7 @@ import numpy as np
 
 def get_all_dfs():
 
-    data_dir = '/home/topiko/Documents/Study/Stock/data/'
+    data_dir = '/home/topiko/Workspace/FinStk2/data/'
 
     all_companies = set()
     df_dict = {}
@@ -100,5 +100,5 @@ def make_large_df(n_days = 0):
 
     return df
 
-df = make_large_df(365*5)
+df = make_large_df(365*4)
 df.to_pickle('combined.pkl')

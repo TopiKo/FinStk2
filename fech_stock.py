@@ -77,7 +77,7 @@ def get_df(elems):
     return df
 
 
-numdays = 1000 #365*15
+numdays = 365*7
 base = datetime.datetime.today()
 days = [base - datetime.timedelta(days=x) for x in range(1, numdays)]
 
