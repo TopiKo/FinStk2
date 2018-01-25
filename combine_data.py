@@ -41,9 +41,8 @@ def make_large_df(n_days = 0):
     N = len(consider_comp)
 
     # Columns to consider
-    #colls_per_company = df_dict[ordered_keys[0]].columns.values.tolist()
-    #print(colls_per_company) ['Offer End', 'Offer Buy', 'Offer Sell', 'Sales Lowest', 'Sales Highest', 'Change M. Eur']
-    colls_per_company = ['offer_end', 'offer_buy', 'offer_sell', 'sales_low', 'sales_high', 'change_Me']
+    colls_per_company = ['offer_end', 'offer_buy', 'offer_sell',
+                         'sales_low', 'sales_high', 'change_Me']
     nc = len(colls_per_company)
 
     # Make array with each company name repeated 6 times (once for for each column).
